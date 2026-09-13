@@ -1,0 +1,1035 @@
+{
+  "info": {
+    "_postman_id": "c0a1e7b2-4d3f-4a91-8b6e-9f2c5d7a1e40",
+    "name": "AI Operations Copilot",
+    "description": "AI-powered backend service that helps an operations team answer customer and operational queries.\n\n## Setup\n\n1. Start the service: `npm install && npm start`\n2. The `baseUrl` variable defaults to `http://localhost:3000` — change it in the collection variables if you run on a different port.\n\nNo authentication is required.\n\n## Where to start\n\nOpen **Copilot → The three example questions** and run them in order. Those are the queries from the problem statement and they exercise the whole system: tool routing, deterministic diagnostics, and grounded answers.\n\n## How to read a response\n\n`POST /api/query` returns an envelope:\n\n- `answer` — the prose answer, the thing a human reads.\n- `meta` — provider, tool rounds, stop reason, latency, token usage.\n- `trace` — the audit trail: every tool call, its arguments, its latency, and which diagnostic rules fired.\n\nAdd `?format=text` to any query request to get just the answer as plain text.\n\n## A note on the design\n\nThe LLM routes and phrases; it does not diagnose. Whether an order is in trouble is decided by deterministic rules over the actual records, which is why `trace[].finding_codes` is the field to check when you want to know *why* an answer says what it says.\n\n## Seeded orders worth trying\n\n| Order | What it demonstrates |\n|---|---|\n| `4521` | Delivered cleanly — healthy, no findings. |\n| `1289` | Paid, warehouse hold, no delivery scheduled. |\n| `2231` | Paid and dispatched, delivery overdue. |\n| `9999` | Does not exist — graceful failure. |",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "healthyOrder",
+      "value": "4521",
+      "type": "string"
+    },
+    {
+      "key": "stuckOrder",
+      "value": "1289",
+      "type": "string"
+    },
+    {
+      "key": "delayedOrder",
+      "value": "2231",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Copilot",
+      "description": "The natural-language endpoint. This is the product.",
+      "item": [
+        {
+          "name": "The three example questions",
+          "description": "The queries from the problem statement, in order. Run these first.",
+          "item": [
+            {
+              "name": "1. Payment status for an order",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('responds 200', () => pm.response.to.have.status(200));",
+                      "",
+                      "const body = pm.response.json();",
+                      "",
+                      "pm.test('answer names the order', () => {",
+                      "    pm.expect(body.answer).to.include('4521');",
+                      "});",
+                      "",
+                      "pm.test('answer reports the payment as captured', () => {",
+                      "    pm.expect(body.answer.toUpperCase()).to.match(/CAPTURED|PAID/);",
+                      "});",
+                      "",
+                      "// The answer must be grounded in a real tool call, not improvised.",
+                      "pm.test('a tool was actually called', () => {",
+                      "    const tools = body.trace.filter((s) => s.kind === 'tool');",
+                      "    pm.expect(tools.length).to.be.above(0);",
+                      "    pm.expect(tools.every((t) => t.ok)).to.be.true;",
+                      "});",
+                      "",
+                      "pm.test('this order is healthy, so no findings fired', () => {",
+                      "    const codes = body.trace.filter((s) => s.kind === 'tool').flatMap((t) => t.finding_codes || []);",
+                      "    pm.expect(codes).to.be.an('array').that.is.empty;",
+                      "});",
+                      "",
+                      "console.log('Answer:\\n' + body.answer);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question\": \"What's the payment status for order #4521?\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/query",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "query"]
+                },
+                "description": "Straightforward retrieval. Order 4521 was delivered cleanly, so the copilot should report it as paid and healthy — and should **not** invent concerns about it.\n\nCheck `trace[1].finding_codes` — it will be an empty array, which is how the system says \"nothing is wrong here\"."
+              },
+              "response": [
+                {
+                  "name": "200 — healthy order",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [{ "key": "Content-Type", "value": "application/json" }],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"question\": \"What's the payment status for order #4521?\"\n}"
+                    },
+                    "url": { "raw": "{{baseUrl}}/api/query", "host": ["{{baseUrl}}"], "path": ["api", "query"] }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+                  "cookie": [],
+                  "body": "{\n  \"request_id\": \"55aa0077-1ab3-4060-97b5-6503d75dee49\",\n  \"answer\": \"The payment status for order #4521 (ORD-4521) is PAID.\\n\\nPayment summary:\\n- Status: PAID (State: CAPTURED)\\n- Amount paid: INR 1,20,946\\n- Method: CREDIT_CARD\\n- Payment attempts: 1 successful attempt (0 failures)\\n\\nThe payment is fully captured and the order is marked healthy with no outstanding issues.\",\n  \"meta\": {\n    \"provider\": \"gemini:gemini-3.6-flash\",\n    \"tool_rounds\": 1,\n    \"stop_reason\": \"answered\",\n    \"duration_ms\": 5810,\n    \"usage\": {\n      \"input_tokens\": 3615,\n      \"output_tokens\": 82\n    }\n  },\n  \"trace\": [\n    {\n      \"step\": 1,\n      \"kind\": \"model\",\n      \"duration_ms\": 2437,\n      \"requested_tools\": [\"get_order_summary\"],\n      \"finish_reason\": \"STOP\"\n    },\n    {\n      \"step\": 2,\n      \"kind\": \"tool\",\n      \"tool\": \"get_order_summary\",\n      \"args\": { \"order_id\": \"4521\" },\n      \"ok\": true,\n      \"error_code\": null,\n      \"duration_ms\": 36,\n      \"finding_codes\": []\n    },\n    {\n      \"step\": 3,\n      \"kind\": \"model\",\n      \"duration_ms\": 3335,\n      \"requested_tools\": [],\n      \"finish_reason\": \"STOP\"\n    }\n  ]\n}"
+                }
+              ]
+            },
+            {
+              "name": "2. Paid but no delivery scheduled",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('responds 200', () => pm.response.to.have.status(200));",
+                      "",
+                      "const body = pm.response.json();",
+                      "const codes = body.trace.filter((s) => s.kind === 'tool').flatMap((t) => t.finding_codes || []);",
+                      "",
+                      "// This is the headline case. The diagnosis comes from a deterministic",
+                      "// rule, not from the model's judgement, so it must appear every time.",
+                      "pm.test('the paid-but-unscheduled rule fired', () => {",
+                      "    pm.expect(codes).to.include('PAID_NO_DELIVERY_SCHEDULED');",
+                      "});",
+                      "",
+                      "pm.test('the warehouse hold explains the blockage', () => {",
+                      "    pm.expect(codes).to.include('WAREHOUSE_HOLD');",
+                      "});",
+                      "",
+                      "pm.test('answer states that nothing is scheduled', () => {",
+                      "    pm.expect(body.answer.toLowerCase()).to.match(/no delivery|not scheduled|unscheduled/);",
+                      "});",
+                      "",
+                      "pm.test('answer carries a next action for the ops agent', () => {",
+                      "    pm.expect(body.answer.toLowerCase()).to.match(/courier|inventory|refund|contact/);",
+                      "});",
+                      "",
+                      "console.log('Findings: ' + codes.join(', '));",
+                      "console.log('Answer:\\n' + body.answer);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question\": \"Customer says they've paid for order #1289 but delivery isn't scheduled - what's going on?\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/query",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "query"]
+                },
+                "description": "**The question that shapes the architecture.**\n\nThis is not retrieval — it is a diagnosis. Answering it requires noticing that two subsystems disagree: payment says captured, fulfilment says nothing scheduled.\n\nThat judgement is made by deterministic rules, not by the model. Check `trace[].finding_codes`: you will see `PAID_NO_DELIVERY_SCHEDULED` and `WAREHOUSE_HOLD`. The model's only job was to phrase them.\n\nThe practical consequence: the amount, the date and the cause in the answer are facts read from rows. They cannot be hallucinated, because the model never had the freedom to invent them."
+              },
+              "response": [
+                {
+                  "name": "200 — critical, paid with nothing scheduled",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [{ "key": "Content-Type", "value": "application/json" }],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"question\": \"Customer says they've paid for order #1289 but delivery isn't scheduled - what's going on?\"\n}"
+                    },
+                    "url": { "raw": "{{baseUrl}}/api/query", "host": ["{{baseUrl}}"], "path": ["api", "query"] }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+                  "cookie": [],
+                  "body": "{\n  \"request_id\": \"b8725f32-c4d9-4528-92d4-6caeaa6c654f\",\n  \"answer\": \"Payment of INR 82,598 was captured on 2024-05-10, but delivery is not scheduled because fulfilment is blocked at the warehouse due to an inventory allocation failure.\\n\\nOrder details:\\n- Order ID: ORD-1289\\n- Order status: PROCESSING (Payment status: PAID via NET_BANKING)\\n- Delivery record: None scheduled\\n- Open ticket: TKT-1289-1 (\\\"Paid but no delivery date\\\", priority HIGH)\\n\\nNext actions:\\n- Resolve the warehouse inventory hold, allocate stock, and book a courier slot today.\\n- If it cannot ship within 24 hours, contact customer Sneha Kulkarni with a revised date or offer a refund.\\n- Follow up with the escalations team on ticket TKT-1289-1.\",\n  \"meta\": {\n    \"provider\": \"gemini:gemini-3.6-flash\",\n    \"tool_rounds\": 1,\n    \"stop_reason\": \"answered\",\n    \"duration_ms\": 9495,\n    \"usage\": {\n      \"input_tokens\": 3905,\n      \"output_tokens\": 226\n    }\n  },\n  \"trace\": [\n    {\n      \"step\": 1,\n      \"kind\": \"model\",\n      \"duration_ms\": 1908,\n      \"requested_tools\": [\"get_order_summary\"],\n      \"finish_reason\": \"STOP\"\n    },\n    {\n      \"step\": 2,\n      \"kind\": \"tool\",\n      \"tool\": \"get_order_summary\",\n      \"args\": { \"order_id\": \"1289\" },\n      \"ok\": true,\n      \"error_code\": null,\n      \"duration_ms\": 1,\n      \"finding_codes\": [\"PAID_NO_DELIVERY_SCHEDULED\", \"WAREHOUSE_HOLD\", \"OPEN_TICKET\"]\n    },\n    {\n      \"step\": 3,\n      \"kind\": \"model\",\n      \"duration_ms\": 7586,\n      \"requested_tools\": [],\n      \"finish_reason\": \"STOP\"\n    }\n  ]\n}"
+                }
+              ]
+            },
+            {
+              "name": "3. Full status summary",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('responds 200', () => pm.response.to.have.status(200));",
+                      "",
+                      "const body = pm.response.json();",
+                      "const codes = body.trace.filter((s) => s.kind === 'tool').flatMap((t) => t.finding_codes || []);",
+                      "",
+                      "pm.test('the overdue-delivery rule fired', () => {",
+                      "    pm.expect(codes).to.include('DELIVERY_OVERDUE');",
+                      "});",
+                      "",
+                      "pm.test('summary covers payment and delivery', () => {",
+                      "    const a = body.answer.toLowerCase();",
+                      "    pm.expect(a).to.include('pay');",
+                      "    pm.expect(a).to.include('deliver');",
+                      "});",
+                      "",
+                      "pm.test('one tool call was enough', () => {",
+                      "    pm.expect(body.meta.tool_rounds).to.eql(1);",
+                      "    pm.expect(body.meta.stop_reason).to.eql('answered');",
+                      "});",
+                      "",
+                      "console.log('Findings: ' + codes.join(', '));",
+                      "console.log('Answer:\\n' + body.answer);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question\": \"Give me a full status summary for order #2231.\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/query",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "query"]
+                },
+                "description": "A breadth question. One `get_order_summary` call returns order, payment, delivery, tickets and diagnostics together, so the copilot answers in a single tool round.\n\nOrder 2231 shipped but missed its promised date, so `DELIVERY_OVERDUE` fires and the answer carries the courier escalation as the next step — AWB included, read straight from the delivery record."
+              },
+              "response": [
+                {
+                  "name": "200 — critical, delivery overdue",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [{ "key": "Content-Type", "value": "application/json" }],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"question\": \"Give me a full status summary for order #2231.\"\n}"
+                    },
+                    "url": { "raw": "{{baseUrl}}/api/query", "host": ["{{baseUrl}}"], "path": ["api", "query"] }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+                  "cookie": [],
+                  "body": "{\n  \"request_id\": \"2a04f571-2130-4143-9b8c-976fe643007f\",\n  \"answer\": \"Order ORD-2231 is in critical health because delivery is 20 days overdue due to a courier vehicle breakdown.\\n\\nKey Details:\\n- Customer: Pooja Joshi (CUST-00040), Kolkata\\n- Order Status: SHIPPED (1 x Robotic Vacuum Cleaner)\\n- Payment: PAID (INR 34,718 via WALLET)\\n- Delivery: DELAYED via BlueDart (AWB 831147267413) at Delhi hub, promised date 2024-04-27\\n- Open Ticket: TKT-2231-1 (\\\"Where is my order?\\\", assigned to ops.team1)\\n\\nRecommended Actions:\\n- Raise a courier escalation with AWB 831147267413 and give the customer a firm revised ETA.\\n- Follow up with ops.team1 on ticket TKT-2231-1.\",\n  \"meta\": {\n    \"provider\": \"gemini:gemini-3.6-flash\",\n    \"tool_rounds\": 1,\n    \"stop_reason\": \"answered\",\n    \"duration_ms\": 10128,\n    \"usage\": {\n      \"input_tokens\": 3959,\n      \"output_tokens\": 247\n    }\n  },\n  \"trace\": [\n    {\n      \"step\": 1,\n      \"kind\": \"model\",\n      \"duration_ms\": 1908,\n      \"requested_tools\": [\"get_order_summary\"],\n      \"finish_reason\": \"STOP\"\n    },\n    {\n      \"step\": 2,\n      \"kind\": \"tool\",\n      \"tool\": \"get_order_summary\",\n      \"args\": { \"order_id\": \"2231\" },\n      \"ok\": true,\n      \"error_code\": null,\n      \"duration_ms\": 0,\n      \"finding_codes\": [\"DELIVERY_OVERDUE\", \"OPEN_TICKET\"]\n    },\n    {\n      \"step\": 3,\n      \"kind\": \"model\",\n      \"duration_ms\": 8219,\n      \"requested_tools\": [],\n      \"finish_reason\": \"STOP\"\n    }\n  ]\n}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Plain text output",
+          "description": "Same endpoint, bare answer. For terminals, shell pipelines and anything that does not want an envelope.",
+          "item": [
+            {
+              "name": "Plain text via ?format=text",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('responds 200', () => pm.response.to.have.status(200));",
+                      "",
+                      "pm.test('content type is text/plain', () => {",
+                      "    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/plain');",
+                      "});",
+                      "",
+                      "pm.test('body is prose, not an envelope', () => {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include('\"request_id\"');",
+                      "    pm.expect(text).to.not.include('\"trace\"');",
+                      "});",
+                      "",
+                      "console.log(pm.response.text());"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question\": \"What's the payment status for order #4521?\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/query?format=text",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "query"],
+                  "query": [
+                    {
+                      "key": "format",
+                      "value": "text",
+                      "description": "`text` for the bare answer, `json` for the full envelope. Overrides the Accept header."
+                    }
+                  ]
+                },
+                "description": "Returns only the answer, as `text/plain`.\n\nThe text is byte-identical to the JSON `answer` field — the format changes the envelope, never the answer. The trace is still computed and logged server-side; it is simply omitted from the response.\n\nError responses honour the format too, so a text client gets a plain sentence rather than JSON on a 400 or 502."
+              },
+              "response": [
+                {
+                  "name": "200 — plain text",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [{ "key": "Content-Type", "value": "application/json" }],
+                    "body": { "mode": "raw", "raw": "{\n  \"question\": \"What's the payment status for order #4521?\"\n}" },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/query?format=text",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "query"],
+                      "query": [{ "key": "format", "value": "text" }]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "text",
+                  "header": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }],
+                  "cookie": [],
+                  "body": "The payment status for order #4521 (ORD-4521) is PAID.\n\nPayment summary:\n- Status: PAID (State: CAPTURED)\n- Amount paid: INR 1,20,946\n- Method: CREDIT_CARD\n- Payment attempts: 1 successful attempt (0 failures)\n\nThe payment is fully captured and the order is marked healthy with no outstanding issues."
+                }
+              ]
+            },
+            {
+              "name": "Plain text via Accept header",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Accept", "value": "text/plain" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question\": \"Give me a full status summary for order #2231.\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/query",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "query"]
+                },
+                "description": "Standard HTTP content negotiation. `Accept: text/plain` gets the bare answer.\n\nJSON remains the default: a bare `Accept: */*` — what browsers and `fetch` send — does not trigger text mode. Only an explicit `text/plain` preference does."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Other questions",
+          "description": "Routing beyond the three examples: tracking, history, fleet-wide, and multi-turn.",
+          "item": [
+            {
+              "name": "Tracking number (routes to delivery tool)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const body = pm.response.json();",
+                      "pm.test('routed to the delivery tool', () => {",
+                      "    const tools = body.trace.filter((s) => s.kind === 'tool').map((t) => t.tool);",
+                      "    pm.expect(tools).to.include('get_delivery_details');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question\": \"What is the tracking number for order 2231?\"\n}"
+                },
+                "url": { "raw": "{{baseUrl}}/api/query", "host": ["{{baseUrl}}"], "path": ["api", "query"] },
+                "description": "A narrow question. The model should reach for `get_delivery_details` rather than the broad summary, because the user asked for one specific field.\n\nCheck `trace[].tool` to confirm the routing."
+              },
+              "response": []
+            },
+            {
+              "name": "Order history (routes to timeline tool)",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question\": \"What happened with order 4521? Show me the history.\"\n}"
+                },
+                "url": { "raw": "{{baseUrl}}/api/query", "host": ["{{baseUrl}}"], "path": ["api", "query"] },
+                "description": "Asks for a sequence of events, so this should route to `get_order_timeline` — the chronological event log rather than a point-in-time status."
+              },
+              "response": []
+            },
+            {
+              "name": "Fleet-wide operational overview",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question\": \"Give me an operational overview of the business.\"\n}"
+                },
+                "url": { "raw": "{{baseUrl}}/api/query", "host": ["{{baseUrl}}"], "path": ["api", "query"] },
+                "description": "No single order in play, so this routes to `get_operational_summary`: order and delivery status counts, how many orders are paid with nothing scheduled, value at risk, and open ticket load."
+              },
+              "response": []
+            },
+            {
+              "name": "Unknown order (graceful failure)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('still responds 200 — this is a valid question with a negative answer', () => {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "const body = pm.response.json();",
+                      "",
+                      "pm.test('the tool reported ORDER_NOT_FOUND', () => {",
+                      "    const tool = body.trace.find((s) => s.kind === 'tool');",
+                      "    pm.expect(tool.ok).to.be.false;",
+                      "    pm.expect(tool.error_code).to.eql('ORDER_NOT_FOUND');",
+                      "});",
+                      "",
+                      "// The point of this request: the model must say it does not know,",
+                      "// rather than inventing a plausible status.",
+                      "pm.test('answer admits the order does not exist', () => {",
+                      "    pm.expect(body.answer.toLowerCase()).to.match(/not found|no order|does not exist|could not/);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question\": \"What is the status of order #9999?\"\n}"
+                },
+                "url": { "raw": "{{baseUrl}}/api/query", "host": ["{{baseUrl}}"], "path": ["api", "query"] },
+                "description": "Order 9999 does not exist.\n\nThe tool returns a structured error, which goes back to the model **as data** rather than being thrown. The model then reports the absence honestly.\n\nThis returns HTTP 200: the request was valid and the system answered it correctly. The failure is in the data, not the call — and it is visible in `trace[].error_code`."
+              },
+              "response": [
+                {
+                  "name": "200 — order does not exist",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [{ "key": "Content-Type", "value": "application/json" }],
+                    "body": { "mode": "raw", "raw": "{\n  \"question\": \"What is the status of order #9999?\"\n}" },
+                    "url": { "raw": "{{baseUrl}}/api/query", "host": ["{{baseUrl}}"], "path": ["api", "query"] }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+                  "cookie": [],
+                  "body": "{\n  \"request_id\": \"7c1d9e33-5b28-4f10-9a44-2e6b8c0d1f52\",\n  \"answer\": \"Order #9999 was not found.\\n\\nNo order exists in the system with the ID ORD-9999. Please verify the order reference number or provide the customer's name or email to look up the correct order.\",\n  \"meta\": {\n    \"provider\": \"gemini:gemini-3.6-flash\",\n    \"tool_rounds\": 1,\n    \"stop_reason\": \"answered\",\n    \"duration_ms\": 4210,\n    \"usage\": { \"input_tokens\": 3502, \"output_tokens\": 48 }\n  },\n  \"trace\": [\n    {\n      \"step\": 1,\n      \"kind\": \"model\",\n      \"duration_ms\": 1740,\n      \"requested_tools\": [\"get_order_summary\"],\n      \"finish_reason\": \"STOP\"\n    },\n    {\n      \"step\": 2,\n      \"kind\": \"tool\",\n      \"tool\": \"get_order_summary\",\n      \"args\": { \"order_id\": \"9999\" },\n      \"ok\": false,\n      \"error_code\": \"ORDER_NOT_FOUND\",\n      \"duration_ms\": 1,\n      \"finding_codes\": []\n    },\n    {\n      \"step\": 3,\n      \"kind\": \"model\",\n      \"duration_ms\": 2469,\n      \"requested_tools\": [],\n      \"finish_reason\": \"STOP\"\n    }\n  ]\n}"
+                }
+              ]
+            },
+            {
+              "name": "Multi-turn with history",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question\": \"And what about order 4521?\",\n  \"history\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Tell me about order 1289.\"\n    },\n    {\n      \"role\": \"assistant\",\n      \"content\": \"Order ORD-1289 is paid but has no delivery scheduled due to a warehouse hold.\"\n    }\n  ]\n}"
+                },
+                "url": { "raw": "{{baseUrl}}/api/query", "host": ["{{baseUrl}}"], "path": ["api", "query"] },
+                "description": "Conversation history is client-supplied — the service holds no session state.\n\nPass prior turns as `{role, content}` where role is `user` or `assistant`. A follow-up like \"and what about X\" then resolves against that context."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Validation errors",
+          "description": "Bad input is rejected before it ever reaches the model.",
+          "item": [
+            {
+              "name": "400 — empty question",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('responds 400', () => pm.response.to.have.status(400));",
+                      "pm.test('error code is INVALID_REQUEST', () => {",
+                      "    pm.expect(pm.response.json().error.code).to.eql('INVALID_REQUEST');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"question\": \"   \"\n}" },
+                "url": { "raw": "{{baseUrl}}/api/query", "host": ["{{baseUrl}}"], "path": ["api", "query"] },
+                "description": "Rejected before any model call — no tokens spent on an empty question."
+              },
+              "response": [
+                {
+                  "name": "400 — INVALID_REQUEST",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [{ "key": "Content-Type", "value": "application/json" }],
+                    "body": { "mode": "raw", "raw": "{\n  \"question\": \"   \"\n}" },
+                    "url": { "raw": "{{baseUrl}}/api/query", "host": ["{{baseUrl}}"], "path": ["api", "query"] }
+                  },
+                  "status": "Bad Request",
+                  "code": 400,
+                  "_postman_previewlanguage": "json",
+                  "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+                  "cookie": [],
+                  "body": "{\n  \"error\": {\n    \"code\": \"INVALID_REQUEST\",\n    \"message\": \"Body must include a non-empty \\\"question\\\" string.\"\n  }\n}"
+                }
+              ]
+            },
+            {
+              "name": "400 — invalid history",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question\": \"Status of order 4521?\",\n  \"history\": \"not-an-array\"\n}"
+                },
+                "url": { "raw": "{{baseUrl}}/api/query", "host": ["{{baseUrl}}"], "path": ["api", "query"] },
+                "description": "`history` must be an array of `{role, content}` objects. Returns `INVALID_HISTORY`."
+              },
+              "response": []
+            },
+            {
+              "name": "400 — plain text error",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"question\": \"\"\n}" },
+                "url": {
+                  "raw": "{{baseUrl}}/api/query?format=text",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "query"],
+                  "query": [{ "key": "format", "value": "text" }]
+                },
+                "description": "Errors honour the requested format. A text client gets a plain sentence, not a JSON object — otherwise `?format=text` would break the moment anything went wrong."
+              },
+              "response": [
+                {
+                  "name": "400 — plain text",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [{ "key": "Content-Type", "value": "application/json" }],
+                    "body": { "mode": "raw", "raw": "{\n  \"question\": \"\"\n}" },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/query?format=text",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "query"],
+                      "query": [{ "key": "format", "value": "text" }]
+                    }
+                  },
+                  "status": "Bad Request",
+                  "code": 400,
+                  "_postman_previewlanguage": "text",
+                  "header": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }],
+                  "cookie": [],
+                  "body": "Body must include a non-empty \"question\" string."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Orders (no LLM)",
+      "description": "The same tools the model calls, reached directly. No model in the path, so these return in about a millisecond and cost nothing.\n\nAn ops dashboard rendering an order page should use these. They are also the fastest way to debug a suspicious answer: if the REST endpoint shows the same thing, the problem is in the data or the rules, not the model.\n\n`:id` accepts `4521`, `#4521` or `ORD-4521`.",
+      "item": [
+        {
+          "name": "Order summary with diagnostics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responds 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('health verdict is present', () => {",
+                  "    pm.expect(body.health).to.be.oneOf(['HEALTHY', 'WATCH', 'NEEDS_ATTENTION', 'CRITICAL']);",
+                  "});",
+                  "",
+                  "pm.test('findings are sorted most severe first', () => {",
+                  "    const rank = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, INFO: 4 };",
+                  "    const severities = body.findings.map((f) => rank[f.severity]);",
+                  "    const sorted = [...severities].sort((a, b) => a - b);",
+                  "    pm.expect(severities).to.eql(sorted);",
+                  "});",
+                  "",
+                  "pm.test('every finding carries an action an ops agent can take', () => {",
+                  "    body.findings.forEach((f) => {",
+                  "        pm.expect(f.recommended_action, f.code).to.be.a('string').with.length.above(20);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/{{stuckOrder}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "{{stuckOrder}}"]
+            },
+            "description": "The primary tool, called directly. Returns order, customer, payment, delivery, open tickets, a `health` verdict and the `findings` array.\n\n`findings` is the interesting part — it is produced by deterministic rules, sorted most severe first, and each entry carries `evidence` (the exact fields the rule fired on) and `recommended_action` (what to do about it).\n\nDefaults to order `1289`. Try `4521` for a healthy order that returns an empty `findings` array."
+          },
+          "response": [
+            {
+              "name": "200 — critical",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/orders/1289",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "orders", "1289"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+              "cookie": [],
+              "body": "{\n  \"order_id\": \"ORD-1289\",\n  \"health\": \"CRITICAL\",\n  \"order\": {\n    \"status\": \"PROCESSING\",\n    \"payment_status\": \"PAID\",\n    \"placed_at\": \"2024-05-10T07:12:00.000Z\",\n    \"channel\": \"WEB\",\n    \"item_count\": 2,\n    \"items\": [\"1 x Queen Bed with Storage\", \"1 x 260L Double Door Refrigerator\"],\n    \"grand_total\": 82598,\n    \"grand_total_formatted\": \"INR 82,598\"\n  },\n  \"customer\": {\n    \"customer_id\": \"CUST-00031\",\n    \"name\": \"Sneha Kulkarni\",\n    \"tier\": \"PLUS\",\n    \"city\": \"Pune\"\n  },\n  \"payment\": {\n    \"state\": \"CAPTURED\",\n    \"method\": \"NET_BANKING\",\n    \"captured\": true,\n    \"amount_paid_formatted\": \"INR 82,598\",\n    \"amount_refunded_formatted\": \"INR 0\",\n    \"attempts\": 1,\n    \"failed_attempt_count\": 0\n  },\n  \"delivery\": null,\n  \"delivery_scheduled\": false,\n  \"open_tickets\": [\n    {\n      \"ticket_id\": \"TKT-1289-1\",\n      \"subject\": \"Paid but no delivery date\",\n      \"priority\": \"HIGH\"\n    }\n  ],\n  \"findings\": [\n    {\n      \"code\": \"PAID_NO_DELIVERY_SCHEDULED\",\n      \"severity\": \"CRITICAL\",\n      \"title\": \"Payment captured but no delivery has been scheduled\",\n      \"detail\": \"We captured INR 82,598 on 2024-05-10 (6 day(s) ago) but there is no delivery record for this order. The order is sitting in PROCESSING.\",\n      \"evidence\": {\n        \"payment_id\": \"PAY-1289-1\",\n        \"captured_at\": \"2024-05-10T07:12:00.000Z\",\n        \"days_stuck\": 6,\n        \"order_status\": \"PROCESSING\",\n        \"delivery_record\": null\n      },\n      \"recommended_action\": \"Check the fulfilment hold on this order, allocate inventory and book a courier slot today. If it cannot ship within 24h, proactively contact the customer with a revised date or offer a refund.\"\n    },\n    {\n      \"code\": \"WAREHOUSE_HOLD\",\n      \"severity\": \"HIGH\",\n      \"title\": \"Fulfilment is blocked at the warehouse\",\n      \"detail\": \"Fulfilment blocked: inventory allocation failed for one or more SKUs.\",\n      \"evidence\": {\n        \"event_id\": \"EVT-1289-3\",\n        \"at\": \"2024-05-10T08:12:00.000Z\",\n        \"source\": \"warehouse\"\n      },\n      \"recommended_action\": \"Resolve the blocking condition (inventory, serviceability or risk review) before promising a date.\"\n    }\n  ],\n  \"as_of\": \"2024-05-17T10:30:00.000Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Order summary — healthy order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('healthy orders produce no findings', () => {",
+                  "    pm.expect(body.health).to.eql('HEALTHY');",
+                  "    pm.expect(body.findings).to.be.an('array').that.is.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/{{healthyOrder}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "{{healthyOrder}}"]
+            },
+            "description": "The control case. Order 4521 was delivered cleanly, so `findings` is empty and `health` is `HEALTHY`.\n\nWorth checking: a copilot that manufactures concerns about healthy orders is as useless as one that misses real problems."
+          },
+          "response": []
+        },
+        {
+          "name": "Payment attempts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/{{healthyOrder}}/payments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "{{healthyOrder}}", "payments"]
+            },
+            "description": "Every payment attempt for an order, oldest first — including failures, retries, gateway transaction ids, failure codes and refunded amounts.\n\nThe `summary` block collapses the history into a current verdict: an order whose first attempt failed and whose retry succeeded reports as `CAPTURED`, not `FAILED`."
+          },
+          "response": []
+        },
+        {
+          "name": "Delivery details",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('overdue days are computed', () => {",
+                  "    pm.expect(body.delivery_record.is_overdue).to.be.true;",
+                  "    pm.expect(body.delivery_record.days_overdue).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/{{delayedOrder}}/delivery",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "{{delayedOrder}}", "delivery"]
+            },
+            "description": "Courier, AWB, promised date, attempt history, current location, and a computed `is_overdue` / `days_overdue`.\n\nTry order `1289` instead: it returns `delivery_record: null` with a `note` explaining that nothing is scheduled. That explicit null is what lets the copilot say \"there is no delivery record\" rather than guessing."
+          },
+          "response": []
+        },
+        {
+          "name": "Delivery — nothing scheduled",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('absence is explicit, not an error', () => {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "    pm.expect(body.delivery_record).to.be.null;",
+                  "    pm.expect(body.note).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/{{stuckOrder}}/delivery",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "{{stuckOrder}}", "delivery"]
+            },
+            "description": "Order 1289 has no delivery record. The endpoint returns 200 with `delivery_record: null` and a `note` — absence is data, not an error.\n\nThis matters: a 404 here would be ambiguous between \"no such order\" and \"no delivery yet\", and the copilot needs to tell those apart."
+          },
+          "response": []
+        },
+        {
+          "name": "Order timeline",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/{{delayedOrder}}/timeline",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "{{delayedOrder}}", "timeline"]
+            },
+            "description": "Chronological event log: placed, paid, dispatched, delayed, refunded, and so on — each with a timestamp, type, description and source (`system`, `courier`, `warehouse`, `ops`, `customer`).\n\nRelated tickets are included alongside."
+          },
+          "response": []
+        },
+        {
+          "name": "Search — paid with nothing scheduled",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('every result matches both filters', () => {",
+                  "    body.orders.forEach((o) => {",
+                  "        pm.expect(o.payment_status).to.eql('PAID');",
+                  "        pm.expect(o.delivery_status).to.eql('NONE');",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders?payment_status=PAID&delivery_status=NONE&limit=25",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"],
+              "query": [
+                {
+                  "key": "payment_status",
+                  "value": "PAID",
+                  "description": "PENDING | PAID | FAILED | REFUNDED | PARTIALLY_REFUNDED | REFUND_PENDING | COD_PENDING"
+                },
+                {
+                  "key": "delivery_status",
+                  "value": "NONE",
+                  "description": "NONE | SCHEDULED | AWAITING_PICKUP | IN_TRANSIT | DELAYED | FAILED_ATTEMPT | DELIVERED | RTO. Use NONE for orders with no delivery record at all."
+                },
+                {
+                  "key": "limit",
+                  "value": "25",
+                  "description": "Max rows. Default 25, capped at 50."
+                },
+                {
+                  "key": "status",
+                  "value": "SHIPPED",
+                  "description": "PENDING | CONFIRMED | PROCESSING | SHIPPED | DELIVERED | CANCELLED | RETURNED | PAYMENT_FAILED",
+                  "disabled": true
+                },
+                {
+                  "key": "customer_id",
+                  "value": "CUST-00031",
+                  "description": "Restrict to one customer.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "**The money-at-risk query.** Every order where payment was captured but no delivery exists.\n\nFilters are optional and AND together. Two are enabled here; `status` and `customer_id` are included but disabled — tick them in Postman's Params tab to try them."
+          },
+          "response": []
+        },
+        {
+          "name": "Search — delayed deliveries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders?delivery_status=DELAYED",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"],
+              "query": [{ "key": "delivery_status", "value": "DELAYED" }]
+            },
+            "description": "Orders whose courier has reported a delay."
+          },
+          "response": []
+        },
+        {
+          "name": "404 — unknown order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responds 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error code is ORDER_NOT_FOUND', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('ORDER_NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/999999",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "999999"]
+            },
+            "description": "Unlike the copilot endpoint — which returns 200 because the *question* was answerable — the direct REST route returns a real 404 when the resource does not exist."
+          },
+          "response": [
+            {
+              "name": "404 — ORDER_NOT_FOUND",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": { "raw": "{{baseUrl}}/api/orders/999999", "host": ["{{baseUrl}}"], "path": ["api", "orders", "999999"] }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"ORDER_NOT_FOUND\",\n    \"message\": \"No order exists with id ORD-999999.\",\n    \"details\": {\n      \"order_id\": \"ORD-999999\"\n    }\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Operations",
+      "item": [
+        {
+          "name": "Fleet-wide summary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('risk counters are present', () => {",
+                  "    pm.expect(body.risk.paid_without_delivery_count).to.be.a('number');",
+                  "    pm.expect(body.risk.paid_without_delivery_value_inr).to.be.a('number');",
+                  "    pm.expect(body.risk.overdue_delivery_count).to.be.a('number');",
+                  "});",
+                  "",
+                  "console.log('Paid with nothing scheduled: ' + body.risk.paid_without_delivery_count +",
+                  "    ' orders, INR ' + body.risk.paid_without_delivery_value_inr.toLocaleString('en-IN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/operations/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "operations", "summary"]
+            },
+            "description": "Operational health across the whole dataset: order and delivery status counts, open ticket load, and a `risk` block — how many orders are paid with nothing scheduled, what that is worth in rupees, and how many deliveries are past their promised date."
+          },
+          "response": [
+            {
+              "name": "200",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": { "raw": "{{baseUrl}}/api/operations/summary", "host": ["{{baseUrl}}"], "path": ["api", "operations", "summary"] }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+              "cookie": [],
+              "body": "{\n  \"as_of\": \"2024-05-17T10:30:00.000Z\",\n  \"totals\": {\n    \"orders\": 120,\n    \"customers\": 60,\n    \"open_tickets\": 28,\n    \"net_captured_value_inr\": 7412883\n  },\n  \"orders_by_status\": {\n    \"DELIVERED\": 32,\n    \"SHIPPED\": 40,\n    \"PROCESSING\": 9,\n    \"CONFIRMED\": 12,\n    \"PENDING\": 10,\n    \"CANCELLED\": 7,\n    \"RETURNED\": 1,\n    \"PAYMENT_FAILED\": 3\n  },\n  \"deliveries_by_status\": {\n    \"DELIVERED\": 32,\n    \"IN_TRANSIT\": 25,\n    \"DELAYED\": 14,\n    \"SCHEDULED\": 11,\n    \"AWAITING_PICKUP\": 8,\n    \"FAILED_ATTEMPT\": 3,\n    \"RTO\": 1,\n    \"NONE\": 30\n  },\n  \"risk\": {\n    \"paid_without_delivery_count\": 9,\n    \"paid_without_delivery_value_inr\": 743122,\n    \"paid_without_delivery_orders\": [\"ORD-1289\", \"ORD-1533\", \"ORD-2104\"],\n    \"overdue_delivery_count\": 17,\n    \"overdue_delivery_orders\": [\"ORD-2231\", \"ORD-1877\", \"ORD-3402\"],\n    \"high_priority_open_tickets\": 11\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Service",
+      "item": [
+        {
+          "name": "Service index",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/", "host": ["{{baseUrl}}"], "path": [""] },
+            "description": "Service description, active provider, and an index of every endpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "Health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('service is up', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().status).to.eql('ok');",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "if (body.using_mock_fallback) {",
+                  "    console.log('NOTE: running on the mock provider — set GEMINI_API_KEY in .env for real answers.');",
+                  "}",
+                  "console.log('Provider: ' + body.provider);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/health", "host": ["{{baseUrl}}"], "path": ["api", "health"] },
+            "description": "**Run this first.** Confirms the service is up and tells you which LLM provider is active.\n\nIf `using_mock_fallback` is `true`, no `GEMINI_API_KEY` is configured and the service is serving deterministic templated answers. Everything still works — the answers are just stilted rather than model-written."
+          },
+          "response": [
+            {
+              "name": "200 — running on Gemini",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": { "raw": "{{baseUrl}}/api/health", "host": ["{{baseUrl}}"], "path": ["api", "health"] }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+              "cookie": [],
+              "body": "{\n  \"status\": \"ok\",\n  \"provider\": \"gemini:gemini-3.6-flash\",\n  \"using_mock_fallback\": false,\n  \"dataset\": {\n    \"customers\": 60,\n    \"orders\": 120,\n    \"payments\": 123,\n    \"deliveries\": 90,\n    \"tickets\": 41,\n    \"events\": 430\n  },\n  \"as_of\": \"2024-05-17T10:30:00.000Z\",\n  \"uptime_s\": 42\n}"
+            }
+          ]
+        },
+        {
+          "name": "Tools exposed to the model",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/tools", "host": ["{{baseUrl}}"], "path": ["api", "tools"] },
+            "description": "The seven read-only functions the model is allowed to call, with the descriptions it routes on.\n\nThe model cannot see the dataset — only what these tools return. All seven are read-only, so a hallucinated call is at worst a wasted round trip, never a wrong write."
+          },
+          "response": []
+        },
+        {
+          "name": "Order id normalisation (debug)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/debug/normalize/%234521",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "debug", "normalize", "%234521"]
+            },
+            "description": "Shows how a user-typed order reference is canonicalised.\n\n`4521`, `#4521`, `ord-4521` and `Order ORD-4521` all resolve to `ORD-4521`. The `#` is URL-encoded as `%23` here, since a literal `#` would start a URL fragment."
+          },
+          "response": []
+        },
+        {
+          "name": "404 — unknown route",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/nope", "host": ["{{baseUrl}}"], "path": ["api", "nope"] },
+            "description": "Unknown routes return a structured `NOT_FOUND` error rather than an HTML error page."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

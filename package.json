@@ -1,0 +1,31 @@
+{
+  "name": "ai-operations-copilot",
+  "version": "1.0.0",
+  "description": "AI-powered backend service that helps an operations team answer customer and operational queries.",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "seed": "node scripts/seed.js",
+    "test": "node --test tests/",
+    "test:watch": "node --test --watch tests/",
+    "demo": "node scripts/demo.js"
+  },
+  "keywords": [
+    "ai",
+    "operations",
+    "copilot",
+    "gemini",
+    "tool-calling"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@google/genai": "^1.29.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0"
+  }
+}
