@@ -75,13 +75,27 @@ npm run demo
 
 Runs the three questions from the problem statement plus four harder ones in-process, printing each answer with the tools it called and the findings it detected. This is the fastest way to see the system work, and it also verifies a real Gemini key end to end if you have set one.
 
-Or use curl:
+Or use curl. Add `?format=text` and you get the answer as plain prose, nothing else:
 
 ```bash
-curl -s localhost:3000/api/query \
+curl -s 'localhost:3000/api/query?format=text' \
   -H 'content-type: application/json' \
-  -d '{"question":"What'\''s the payment status for order #4521?"}' | jq -r .answer
+  -d '{"question":"What'\''s the payment status for order #4521?"}'
 ```
+
+```
+The payment status for order #4521 (ORD-4521) is PAID.
+
+Payment summary:
+- Status: PAID (State: CAPTURED)
+- Amount paid: INR 1,20,946
+- Method: CREDIT_CARD
+- Payment attempts: 1 successful attempt (0 failures)
+
+The payment is fully captured and the order is marked healthy with no outstanding issues.
+```
+
+Without `format=text` the same call returns the full JSON envelope — the answer plus the audit trail. Both are documented under [POST /api/query](#post-apiquery).
 
 ```bash
 # no LLM in the path at all - raw diagnostics
@@ -96,7 +110,7 @@ curl -s localhost:3000/api/orders/1289 | jq '.health, .findings[].code'
 npm test
 ```
 
-88 tests, no network, no API key, deterministic. They cover the diagnostic rules, the tool layer against the real seeded dataset, the agent loop's guardrails, the Gemini message mapping and the full HTTP surface end to end.
+97 tests, no network, no API key, deterministic. They cover the diagnostic rules, the tool layer against the real seeded dataset, the agent loop's guardrails, the Gemini message mapping and the full HTTP surface end to end.
 
 ```
 tests/diagnostics.test.js   rule correctness and severity escalation
@@ -110,7 +124,7 @@ tests/api.test.js           HTTP end to end, including the three brief questions
 
 ## API
 
-Base URL `http://localhost:3000`. All responses are JSON.
+Base URL `http://localhost:3000`. Responses are JSON by default; `POST /api/query` also serves plain text on request — see [Plain text](#plain-text) below.
 
 ### `POST /api/query`
 
@@ -155,6 +169,36 @@ The copilot. Ask anything about orders.
 `trace` is the audit trail: every tool call, its arguments, its latency, and which diagnostic rules fired. When an ops agent disputes an answer, this shows exactly which records produced it. Set `EXPOSE_TRACE=false` to omit it.
 
 `stop_reason` is one of `answered`, `max_tool_rounds` or `timeout`.
+
+**Plain text**
+
+For a bare answer with no envelope, ask for text — either with `?format=text` or an `Accept: text/plain` header. The query parameter wins if both are present.
+
+```bash
+curl -s 'localhost:3000/api/query?format=text' \
+  -H 'content-type: application/json' \
+  -d '{"question":"Give me a full status summary for order #2231."}'
+```
+
+```
+Order ORD-2231 is in critical health because delivery is 20 days overdue due to a
+courier vehicle breakdown.
+
+Key Details:
+- Customer: Pooja Joshi (CUST-00040), Kolkata
+- Order Status: SHIPPED (1 x Robotic Vacuum Cleaner)
+- Payment: PAID (INR 34,718 via WALLET)
+- Delivery: DELAYED via BlueDart (AWB 831147267413) at Delhi hub, promised 2024-04-27
+- Open Ticket: TKT-2231-1 ("Where is my order?", assigned to ops.team1)
+
+Recommended Actions:
+- Raise a courier escalation with AWB 831147267413 and give the customer a firm revised ETA.
+- Follow up with ops.team1 on ticket TKT-2231-1.
+```
+
+The text is byte-identical to the JSON `answer` field — the format changes the envelope, never the answer. Errors respect the format too, so a text client gets a plain sentence rather than JSON on a 400 or 502. The trace is still computed and logged server-side; it is simply omitted from the response.
+
+JSON is the default: a bare `Accept: */*` (what browsers and `fetch` send) does not trigger text mode.
 
 **Errors**
 
@@ -269,7 +313,7 @@ src/
 scripts/
   seed.js              deterministic data generator
   demo.js              runs the example questions
-tests/                 88 tests
+tests/                 97 tests
 ```
 #   c a r s 2 4  
  
