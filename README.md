@@ -30,6 +30,19 @@ The design rationale is in [DESIGN.md](DESIGN.md). The short version: **the LLM 
 
 ---
 
+## Table of Contents
+
+- [Setup](#setup)
+- [Try It](#try-it)
+- [Tests](#tests)
+- [API](#api)
+- [The Tools](#the-tools)
+- [Seed Data](#seed-data)
+- [Configuration](#configuration)
+- [Layout](#layout)
+
+---
+
 ## Setup
 
 Requires Node.js 20 or later. No database, no Docker, no external services.
@@ -58,7 +71,7 @@ GEMINI_API_KEY=your-key-here
 
 Get one free at [aistudio.google.com/apikey](https://aistudio.google.com/apikey). Restart, and the startup banner will read `provider: gemini:gemini-3.6-flash`.
 
-> `.env` is gitignored. Never commit a key, and rotate any key that has been pasted into a chat window, shared screen or terminal recording.
+> **Note:** `.env` is gitignored. Never commit a key, and rotate any key that has been pasted into a chat window, shared screen or terminal recording.
 
 ### Running it without an API key
 
@@ -68,7 +81,7 @@ This exists so you can clone and evaluate this repo in sixty seconds without pro
 
 ---
 
-## Try it
+## Try It
 
 ```bash
 npm run demo
@@ -113,13 +126,13 @@ npm test
 
 97 tests, no network, no API key, deterministic. They cover the diagnostic rules, the tool layer against the real seeded dataset, the agent loop's guardrails, the Gemini message mapping and the full HTTP surface end to end.
 
-```
-tests/diagnostics.test.js   rule correctness and severity escalation
-tests/tools.test.js         tool behaviour against real seed data
-tests/copilot.test.js       loop bounds: runaway models, tool errors, timeouts
-tests/gemini.test.js        Gemini contents mapping and schema compatibility
-tests/api.test.js           HTTP end to end, including the three brief questions
-```
+| File | Covers |
+|---|---|
+| `tests/diagnostics.test.js` | Rule correctness and severity escalation |
+| `tests/tools.test.js` | Tool behaviour against real seed data |
+| `tests/copilot.test.js` | Loop bounds: runaway models, tool errors, timeouts |
+| `tests/gemini.test.js` | Gemini contents mapping and schema compatibility |
+| `tests/api.test.js` | HTTP end to end, including the three brief questions |
 
 ---
 
@@ -241,7 +254,7 @@ curl -s 'localhost:3000/api/orders?payment_status=PAID&delivery_status=NONE' | j
 
 ---
 
-## The tools
+## The Tools
 
 The model cannot see the dataset. It can only call these seven read-only functions, and every fact in an answer comes from one of them.
 
@@ -259,7 +272,7 @@ All seven are read-only, so a hallucinated call is at worst a wasted round trip 
 
 ---
 
-## Seed data
+## Seed Data
 
 `npm run seed` regenerates `data/seed.json`: 120 orders, 60 customers, 123 payments, 90 deliveries, 41 tickets and 430 events.
 
@@ -305,8 +318,8 @@ src/
     prompt.js          the system prompt
   llm/
     provider.js        provider interface
-    gemini.js          Gemini adapter, retries, message mapping
-    mock.js            deterministic offline provider
+    gemini.js           Gemini adapter, retries, message mapping
+    mock.js             deterministic offline provider
   tools/index.js       the seven tools and their schemas
   lib/diagnostics.js   deterministic rules - the heart of the system
   data/repository.js   data access, indexed at load
@@ -316,18 +329,3 @@ scripts/
   demo.js              runs the example questions
 tests/                 97 tests
 ```
-#   c a r s 2 4 
- 
- #   c a r s 2 4 
- 
- #   c a r s 2 4 
- 
- #   c a r s 2 4 
- 
- #   c a r s 2 4 
- 
- #   c a r s 2 4 
- 
- #   c a r s 2 4 
- 
- 
