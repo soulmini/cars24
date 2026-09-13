@@ -12,6 +12,7 @@ Order ORD-1289 - critical.
 Order status: PROCESSING, placed 2024-05-10 via WEB.
 Payment: CAPTURED via NET_BANKING, INR 82,598 captured.
 Delivery: nothing scheduled - there is no delivery record for this order.
+
 Open tickets: TKT-1289-1 (HIGH) "Paid but no delivery date".
 
 Issues detected:
@@ -315,11 +316,18 @@ scripts/
   demo.js              runs the example questions
 tests/                 97 tests
 ```
-#   c a r s 2 4  
- #   c a r s 2 4  
- #   c a r s 2 4  
- #   c a r s 2 4  
- #   c a r s 2 4  
- #   c a r s 2 4  
- #   c a r s 2 4  
+#   c a r s 2 4 
+ 
+ #   c a r s 2 4 
+ 
+ #   c a r s 2 4 
+ 
+ #   c a r s 2 4 
+ 
+ #   c a r s 2 4 
+ 
+ #   c a r s 2 4 
+ 
+ #   c a r s 2 4 
+ 
  
